@@ -7,6 +7,13 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
+// Enable detailed Blazor errors for debugging
+builder.Services.AddServerSideBlazor()
+    .AddCircuitOptions(options => 
+    {
+        options.DetailedErrors = true;
+    });
+
 // Add Speech Service
 builder.Services.AddSingleton<SpeechRecognitionService>();
 
