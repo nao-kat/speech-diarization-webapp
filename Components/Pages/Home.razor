@@ -1,0 +1,519 @@
+@page "/"
+@using Microsoft.AspNetCore.Components.Web
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@inject SpeechRecognitionService SpeechService
+@inject IJSRuntime JS
+
+<PageTitle>リアルタイム音声文字起こし</PageTitle>
+
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="mb-2">🎤 リアルタイム音声文字起こし</h1>
+            <p class="text-muted small mb-4">
+                <i class="bi bi-info-circle"></i> このシステムはデモンストレーション用です。音声認識および話者分離の結果には誤りが含まれる可能性があります。
+            </p>
+            
+            <div class="card mb-4">
+                <div class="card-body">
+                    <div class="d-flex align-items-center gap-3">
+                        <button class="btn @(isRecording ? "btn-danger" : "btn-primary") btn-lg" 
+                                @onclick="ToggleRecording"
+                                disabled="@isProcessing">
+                            @if (isRecording)
+                            {
+                                <span>⏹ 停止して話者分離</span>
+                            }
+                            else
+                            {
+                                <span>🎤 マイクON</span>
+                            }
+                        </button>
+                        
+                        @if (isRecording)
+                        {
+                            <span class="badge bg-danger fs-5">
+                                <span class="spinner-grow spinner-grow-sm me-2"></span>
+                                録音中
+                            </span>
+                        }
+                        
+                        @if (isProcessing)
+                        {
+                            <span class="badge bg-warning fs-5">
+                                <span class="spinner-border spinner-border-sm me-2"></span>
+                                話者分離処理中...
+                            </span>
+                        }
+                    </div>
+
+                    <!-- 速記者メモ入力 -->
+                    @if (isRecording)
+                    {
+                        <div class="mb-3">
+                            <div class="card border-warning">
+                                <div class="card-header bg-warning bg-opacity-25">
+                                    <h6 class="mb-0">📝 速記者メモ</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-2">
+                                        <input type="text" class="form-control" @bind="currentNote" @bind:event="oninput"
+                                               @onkeydown="HandleNoteKeyDown"
+                                               placeholder="メモを入力してEnterで追加..." />
+                                    </div>
+                                    <button class="btn btn-sm btn-warning" @onclick="AddNote" disabled="@(string.IsNullOrWhiteSpace(currentNote))">
+                                        ✏️ メモ追加 (Enter)
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="row">
+                <!-- 左側: リアルタイム文字起こし -->
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header bg-primary text-white">
+                            <h5 class="mb-0">⚡ リアルタイム文字起こし</h5>
+                            <small>話者分離なし・高速表示</small>
+                        </div>
+                        <div class="card-body" style="height: 500px; overflow-y: auto;" id="realtimeArea">
+                            @if (realtimeTranscriptions.Count == 0)
+                            {
+                                <p class="text-muted">マイクをONにして話し始めてください...</p>
+                            }
+                            else
+                            {
+                                @foreach (var item in realtimeTranscriptions.AsEnumerable().Reverse())
+                                {
+                                    @if (item.IsNote)
+                                    {
+                                        <div class="mb-2 p-2 border border-warning bg-warning bg-opacity-10 rounded">
+                                            <div class="d-flex justify-content-between align-items-start mb-1">
+                                                <div>
+                                                    <strong class="badge bg-warning text-dark">📝 速記メモ</strong>
+                                                    <small class="text-muted ms-2">
+                                                        @item.Timestamp.ToString("HH:mm:ss")
+                                                    </small>
+                                                </div>
+                                            </div>
+                                            <div class="fst-italic">@item.Text</div>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="mb-2 p-2 @(item.IsFinalized ? "bg-light" : "bg-warning bg-opacity-25") rounded">
+                                            <div class="d-flex justify-content-between align-items-start mb-1">
+                                                <div>
+                                                    @if (item.IsFinalized && !string.IsNullOrEmpty(item.SpeakerId) && item.SpeakerId != "Unknown")
+                                                    {
+                                                        <strong class="@GetSpeakerColor(item.SpeakerId) me-2">
+                                                            @GetSpeakerName(item.SpeakerId)
+                                                        </strong>
+                                                    }
+                                                    <small class="text-muted">
+                                                        @item.Timestamp.ToString("HH:mm:ss")
+                                                        @if (!item.IsFinalized)
+                                                        {
+                                                            <span class="ms-2">認識中...</span>
+                                                        }
+                                                    </small>
+                                                </div>
+                                            </div>
+                                            <div>@item.Text</div>
+                                        </div>
+                                    }
+                                }
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 右側: 話者分離結果 -->
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header bg-success text-white">
+                            <h5 class="mb-0">👥 話者分離結果</h5>
+                            <small>停止時に高精度分析</small>
+                        </div>
+                        <div class="card-body" style="height: 500px; overflow-y: auto;" id="diarizedArea">
+                            @if (diarizedTranscriptions.Count == 0)
+                            {
+                                <p class="text-muted">停止ボタンを押すと話者分離結果が表示されます...</p>
+                            }
+                            else
+                            {
+                                @foreach (var item in diarizedTranscriptions.AsEnumerable().Reverse())
+                                {
+                                    <div class="mb-3 p-3 rounded @GetDiarizedSpeakerClass(item.SpeakerId)">
+                                        <div class="d-flex justify-content-between align-items-start mb-2">
+                                            <strong class="@GetDiarizedSpeakerColor(item.SpeakerId)">
+                                                @GetDiarizedSpeakerName(item.SpeakerId)
+                                            </strong>
+                                            <small class="text-muted">@item.Timestamp.ToString("HH:mm:ss")</small>
+                                        </div>
+                                        <div>@item.Text</div>
+                                    </div>
+                                }
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool isRecording = false;
+    private bool isProcessing = false;
+    private List<TranscriptionItem> realtimeTranscriptions = new();
+    private List<TranscriptionItem> diarizedTranscriptions = new();
+    private List<TranscriptionItem> transcriptions = new(); // 互換性のため残す
+    private DotNetObjectReference<Home>? objRef;
+    private Dictionary<string, TranscriptionItem> ongoingTranscriptions = new();
+    private string? currentRecordingPath;
+    private Dictionary<string, int> speakerMapping = new(); // Azure ID → UI番号のマッピング（リアルタイム用）
+    private Dictionary<string, int> diarizedSpeakerMapping = new(); // Azure ID → UI番号のマッピング（話者分離用）
+    private int nextSpeakerNumber = 1; // 次に割り当てる話者番号
+    private string currentNote = string.Empty; // 現在入力中のメモ
+
+    protected override void OnInitialized()
+    {
+        SpeechService.OnTranscriptionReceived += HandleTranscription;
+        SpeechService.OnTranscribing += HandleTranscribing;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            objRef = DotNetObjectReference.Create(this);
+        }
+    }
+
+    private async Task ToggleRecording()
+    {
+        isRecording = !isRecording;
+        
+        if (isRecording)
+        {
+            realtimeTranscriptions.Clear();
+            diarizedTranscriptions.Clear();
+            speakerMapping.Clear();
+            nextSpeakerNumber = 1;
+            currentRecordingPath = await JS.InvokeAsync<string>("startRecording", objRef);
+            await SpeechService.StartRecognitionAsync();
+        }
+        else
+        {
+            await JS.InvokeVoidAsync("stopRecording");
+            await SpeechService.StopRecognitionAsync();
+            
+            // 録音ファイルから話者分離を実行
+            if (!string.IsNullOrEmpty(currentRecordingPath))
+            {
+                await ProcessDiarization(currentRecordingPath);
+            }
+        }
+        
+        StateHasChanged();
+    }
+    
+    private async Task ProcessDiarization(string recordingPath)
+    {
+        isProcessing = true;
+        StateHasChanged();
+        
+        try
+        {
+            Console.WriteLine($"Starting diarization for: {recordingPath}");
+            
+            // WebMファイルのパスを取得（ダウンロードフォルダを確認）
+            var downloadsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
+            var webmFile = Path.Combine(downloadsPath, recordingPath);
+            
+            if (!File.Exists(webmFile))
+            {
+                Console.WriteLine($"Recording file not found: {webmFile}");
+                return;
+            }
+            
+            // Azure Speech高速文字起こしAPIで話者分離（WebM直接サポート）
+            var results = await SpeechService.ProcessAudioFileWithDiarizationAsync(webmFile);
+            
+            // 話者分離用のマッピングをリセット
+            diarizedSpeakerMapping.Clear();
+            int diarizedNextSpeakerNumber = 1;
+            
+            // 結果を表示用に変換
+            diarizedTranscriptions.Clear();
+            var baseTime = DateTime.Now;
+            
+            foreach (var (text, speakerId, offset) in results)
+            {
+                // 話者分離用のマッピングを使用
+                if (!string.IsNullOrEmpty(speakerId) && speakerId != "Unknown" && !diarizedSpeakerMapping.ContainsKey(speakerId))
+                {
+                    diarizedSpeakerMapping[speakerId] = diarizedNextSpeakerNumber++;
+                }
+                
+                diarizedTranscriptions.Add(new TranscriptionItem
+                {
+                    Text = text,
+                    SpeakerId = speakerId,
+                    Timestamp = baseTime.Add(offset)
+                });
+            }
+            
+            Console.WriteLine($"Diarization completed: {results.Count} segments");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Diarization error: {ex.Message}");
+        }
+        finally
+        {
+            isProcessing = false;
+            StateHasChanged();
+        }
+    }
+
+    [JSInvokable]
+    public async Task ReceiveAudioData(int[] audioData)
+    {
+        if (audioData != null && audioData.Length > 0)
+        {
+            var byteArray = new byte[audioData.Length];
+            for (int i = 0; i < audioData.Length; i++)
+            {
+                byteArray[i] = (byte)audioData[i];
+            }
+            await SpeechService.ProcessAudioDataAsync(byteArray);
+        }
+    }
+
+    private void HandleTranscribing(string text, string speakerId)
+    {
+        // リアルタイムの途中経過を表示（話者情報は使わない）
+        // 最後の未確定アイテム（メモ以外）を探して更新
+        if (realtimeTranscriptions.Count > 0)
+        {
+            // 最後から順に探して、最初に見つかった未確定の文字起こしアイテムを更新
+            for (int i = realtimeTranscriptions.Count - 1; i >= 0; i--)
+            {
+                var item = realtimeTranscriptions[i];
+                if (!item.IsFinalized && !item.IsNote)
+                {
+                    // 既存の認識中アイテムを上書き
+                    item.Text = text;
+                    item.Timestamp = DateTime.Now;
+                    InvokeAsync(StateHasChanged);
+                    return;
+                }
+            }
+        }
+        
+        // 認識中の新規アイテムを追加
+        realtimeTranscriptions.Add(new TranscriptionItem
+        {
+            Text = text,
+            SpeakerId = "Unknown",
+            Timestamp = DateTime.Now,
+            IsFinalized = false
+        });
+        
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void HandleTranscription(string text, string speakerId)
+    {
+        // 確定した結果をリアルタイムに追加（話者情報も反映）
+        if (realtimeTranscriptions.Count > 0)
+        {
+            // 最後から順に探して、最初に見つかった未確定の文字起こしアイテムを確定
+            for (int i = realtimeTranscriptions.Count - 1; i >= 0; i--)
+            {
+                var item = realtimeTranscriptions[i];
+                if (!item.IsFinalized && !item.IsNote)
+                {
+                    // 最後の認識中アイテムを確定（話者IDも更新）
+                    item.Text = text;
+                    item.SpeakerId = speakerId;
+                    item.IsFinalized = true;
+                    InvokeAsync(StateHasChanged);
+                    return;
+                }
+            }
+        }
+        
+        // 該当する認識中アイテムがない場合は新規追加（通常発生しない）
+        realtimeTranscriptions.Add(new TranscriptionItem
+        {
+            Text = text,
+            SpeakerId = "Unknown",
+            Timestamp = DateTime.Now,
+            IsFinalized = true
+        });
+        
+        InvokeAsync(StateHasChanged);
+    }
+
+    private string GetSpeakerClass(string speakerId)
+    {
+        return speakerId switch
+        {
+            "Guest-1" => "bg-primary bg-opacity-10 border-start border-primary border-4",
+            "Guest-2" => "bg-success bg-opacity-10 border-start border-success border-4",
+            _ => "bg-secondary bg-opacity-10 border-start border-secondary border-4"
+        };
+    }
+
+    private string GetSpeakerColor(string speakerId)
+    {
+        if (string.IsNullOrEmpty(speakerId) || speakerId == "Unknown")
+        {
+            return "badge bg-secondary";
+        }
+        
+        // マッピングされた番号に応じて色を変える
+        if (!speakerMapping.ContainsKey(speakerId))
+        {
+            speakerMapping[speakerId] = nextSpeakerNumber++;
+        }
+        
+        return speakerMapping[speakerId] switch
+        {
+            1 => "badge bg-primary",
+            2 => "badge bg-success",
+            3 => "badge bg-info",
+            4 => "badge bg-warning",
+            5 => "badge bg-danger",
+            _ => "badge bg-secondary"
+        };
+    }
+
+    private async Task HandleNoteKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(currentNote))
+        {
+            // Enterキーでメモ追加
+            AddNote();
+            await Task.CompletedTask;
+        }
+    }
+
+    private void AddNote()
+    {
+        if (string.IsNullOrWhiteSpace(currentNote))
+            return;
+        
+        // メモを単純に追加するだけ。認識中メッセージには一切触れない。
+        realtimeTranscriptions.Add(new TranscriptionItem
+        {
+            Text = currentNote.Trim(),
+            Timestamp = DateTime.Now,
+            IsNote = true,
+            IsFinalized = true
+        });
+        
+        currentNote = string.Empty;
+        StateHasChanged();
+    }
+
+    private string GetSpeakerName(string speakerId)
+    {
+        if (string.IsNullOrEmpty(speakerId) || speakerId == "Unknown")
+        {
+            return "識別中...";
+        }
+        
+        // Azure IDをUI用の連番にマッピング
+        if (!speakerMapping.ContainsKey(speakerId))
+        {
+            speakerMapping[speakerId] = nextSpeakerNumber++;
+        }
+        
+        return $"話者{speakerMapping[speakerId]}";
+    }
+
+    // 話者分離結果用のメソッド（独立したマッピングを使用）
+    private string GetDiarizedSpeakerName(string speakerId)
+    {
+        if (string.IsNullOrEmpty(speakerId) || speakerId == "Unknown")
+        {
+            return "識別中...";
+        }
+        
+        if (diarizedSpeakerMapping.ContainsKey(speakerId))
+        {
+            return $"話者{diarizedSpeakerMapping[speakerId]}";
+        }
+        
+        return speakerId;
+    }
+
+    private string GetDiarizedSpeakerColor(string speakerId)
+    {
+        if (string.IsNullOrEmpty(speakerId) || speakerId == "Unknown")
+        {
+            return "badge bg-secondary";
+        }
+        
+        if (diarizedSpeakerMapping.ContainsKey(speakerId))
+        {
+            return diarizedSpeakerMapping[speakerId] switch
+            {
+                1 => "badge bg-primary",
+                2 => "badge bg-success",
+                3 => "badge bg-info",
+                4 => "badge bg-warning",
+                5 => "badge bg-danger",
+                _ => "badge bg-secondary"
+            };
+        }
+        
+        return "badge bg-secondary";
+    }
+
+    private string GetDiarizedSpeakerClass(string speakerId)
+    {
+        if (string.IsNullOrEmpty(speakerId) || speakerId == "Unknown")
+        {
+            return "bg-light";
+        }
+        
+        if (diarizedSpeakerMapping.ContainsKey(speakerId))
+        {
+            return diarizedSpeakerMapping[speakerId] switch
+            {
+                1 => "bg-primary bg-opacity-10",
+                2 => "bg-success bg-opacity-10",
+                3 => "bg-info bg-opacity-10",
+                4 => "bg-warning bg-opacity-10",
+                5 => "bg-danger bg-opacity-10",
+                _ => "bg-light"
+            };
+        }
+        
+        return "bg-light";
+    }
+
+    public void Dispose()
+    {
+        SpeechService.OnTranscriptionReceived -= HandleTranscription;
+        SpeechService.OnTranscribing -= HandleTranscribing;
+        objRef?.Dispose();
+    }
+
+    public class TranscriptionItem
+    {
+        public string Text { get; set; } = string.Empty;
+        public string SpeakerId { get; set; } = string.Empty;
+        public DateTime Timestamp { get; set; }
+        public bool IsFinalized { get; set; } = true;
+        public bool IsNote { get; set; } = false;
+    }
+}
