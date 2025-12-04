@@ -10,6 +10,9 @@ builder.Services.AddRazorComponents()
 // Add Speech Service
 builder.Services.AddSingleton<SpeechRecognitionService>();
 
+// Add Summarization Service
+builder.Services.AddSingleton<SummarizationService>();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.

@@ -2,82 +2,87 @@
 @using Microsoft.AspNetCore.Components.Web
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @inject SpeechRecognitionService SpeechService
+@inject SummarizationService SummarizationService
 @inject IJSRuntime JS
 
 <PageTitle>リアルタイム音声文字起こし</PageTitle>
 
-<div class="container mt-4">
-    <div class="row">
-        <div class="col-12">
-            <h1 class="mb-2">🎤 リアルタイム音声文字起こし</h1>
-            <p class="text-muted small mb-4">
-                <i class="bi bi-info-circle"></i> このシステムはデモンストレーション用です。音声認識および話者分離の結果には誤りが含まれる可能性があります。
+<div class="container-fluid px-4 py-3">
+    <!-- ヘッダー -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h2 class="mb-1 fw-bold">🎤 リアルタイム音声文字起こし</h2>
+            <p class="text-muted small mb-0">
+                このシステムはデモンストレーション用です。音声認識および話者分離の結果には誤りが含まれる可能性があります。
             </p>
-            
-            <div class="card mb-4">
-                <div class="card-body">
-                    <div class="d-flex align-items-center gap-3">
-                        <button class="btn @(isRecording ? "btn-danger" : "btn-primary") btn-lg" 
-                                @onclick="ToggleRecording"
-                                disabled="@isProcessing">
-                            @if (isRecording)
-                            {
-                                <span>⏹ 停止して話者分離</span>
-                            }
-                            else
-                            {
-                                <span>🎤 マイクON</span>
-                            }
-                        </button>
-                        
-                        @if (isRecording)
-                        {
-                            <span class="badge bg-danger fs-5">
-                                <span class="spinner-grow spinner-grow-sm me-2"></span>
-                                録音中
-                            </span>
-                        }
-                        
-                        @if (isProcessing)
-                        {
-                            <span class="badge bg-warning fs-5">
-                                <span class="spinner-border spinner-border-sm me-2"></span>
-                                話者分離処理中...
-                            </span>
-                        }
-                    </div>
+        </div>
+        <div class="d-flex align-items-center gap-3">
+            @if (isRecording)
+            {
+                <span class="badge bg-danger px-3 py-2">
+                    <span class="spinner-grow spinner-grow-sm me-2"></span>
+                    録音中
+                </span>
+            }
+            @if (isProcessing)
+            {
+                <span class="badge bg-warning text-dark px-3 py-2">
+                    <span class="spinner-border spinner-border-sm me-2"></span>
+                    話者分離処理中
+                </span>
+            }
+            <button class="btn @(isRecording ? "btn-danger" : "btn-primary") d-flex align-items-center gap-2" 
+                    @onclick="ToggleRecording"
+                    disabled="@isProcessing"
+                    style="min-width: 150px;">
+                @if (isRecording)
+                {
+                    <span>⏹</span>
+                    <span>停止</span>
+                }
+                else
+                {
+                    <span>🎤</span>
+                    <span>マイクON</span>
+                }
+            </button>
+        </div>
+    </div>
 
-                    <!-- 速記者メモ入力 -->
-                    @if (isRecording)
-                    {
-                        <div class="mb-3">
-                            <div class="card border-warning">
-                                <div class="card-header bg-warning bg-opacity-25">
-                                    <h6 class="mb-0">📝 速記者メモ</h6>
-                                </div>
-                                <div class="card-body">
-                                    <div class="mb-2">
-                                        <input type="text" class="form-control" @bind="currentNote" @bind:event="oninput"
-                                               @onkeydown="HandleNoteKeyDown"
-                                               placeholder="メモを入力してEnterで追加..." />
-                                    </div>
-                                    <button class="btn btn-sm btn-warning" @onclick="AddNote" disabled="@(string.IsNullOrWhiteSpace(currentNote))">
-                                        ✏️ メモ追加 (Enter)
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    }
+    <!-- 速記者メモ入力（録音中のみ表示） -->
+    @if (isRecording)
+    {
+        <div class="card border-warning mb-3 shadow-sm">
+            <div class="card-body py-2">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="text-warning fw-bold">📝</span>
+                    <input type="text" class="form-control form-control-sm border-0" @bind="currentNote" @bind:event="oninput"
+                           @onkeydown="HandleNoteKeyDown"
+                           placeholder="速記メモを入力してEnterで追加..." />
+                    <button class="btn btn-sm btn-warning" @onclick="AddNote" disabled="@(string.IsNullOrWhiteSpace(currentNote))">
+                        追加
+                    </button>
                 </div>
             </div>
+        </div>
+    }
 
-            <div class="row">
+    <div class="row">
+        <div class="col-12">
+            <div class="row g-3 mb-3">
                 <!-- 左側: リアルタイム文字起こし -->
                 <div class="col-md-6">
-                    <div class="card">
-                        <div class="card-header bg-primary text-white">
-                            <h5 class="mb-0">⚡ リアルタイム文字起こし</h5>
-                            <small>話者分離なし・高速表示</small>
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center py-2">
+                            <div>
+                                <h6 class="mb-0">⚡ リアルタイム文字起こし</h6>
+                                <small class="opacity-75">話者分離なし・高速表示</small>
+                            </div>
+                            <button class="btn btn-light btn-sm" 
+                                    @onclick="CopyRealtimeTranscription"
+                                    disabled="@(realtimeTranscriptions.Count == 0)">
+                                📋 コピー
+                            </button>
                         </div>
                         <div class="card-body" style="height: 500px; overflow-y: auto;" id="realtimeArea">
                             @if (realtimeTranscriptions.Count == 0)
@@ -107,7 +112,7 @@
                                         <div class="mb-2 p-2 @(item.IsFinalized ? "bg-light" : "bg-warning bg-opacity-25") rounded">
                                             <div class="d-flex justify-content-between align-items-start mb-1">
                                                 <div>
-                                                    @if (item.IsFinalized && !string.IsNullOrEmpty(item.SpeakerId) && item.SpeakerId != "Unknown")
+                                                    @if (ShowRealtimeSpeaker && item.IsFinalized && !string.IsNullOrEmpty(item.SpeakerId) && item.SpeakerId != "Unknown")
                                                     {
                                                         <strong class="@GetSpeakerColor(item.SpeakerId) me-2">
                                                             @GetSpeakerName(item.SpeakerId)
@@ -133,22 +138,29 @@
 
                 <!-- 右側: 話者分離結果 -->
                 <div class="col-md-6">
-                    <div class="card">
-                        <div class="card-header bg-success text-white">
-                            <h5 class="mb-0">👥 話者分離結果</h5>
-                            <small>停止時に高精度分析</small>
+                    <div class="card shadow-sm">
+                        <div class="card-header bg-success text-white d-flex justify-content-between align-items-center py-2">
+                            <div>
+                                <h6 class="mb-0">🎯 話者分離結果</h6>
+                                <small class="opacity-75">録音停止後に自動処理</small>
+                            </div>
+                            <button class="btn btn-light btn-sm" 
+                                    @onclick="CopyDiarizedTranscription"
+                                    disabled="@(diarizedTranscriptions.Count == 0)">
+                                📋 コピー
+                            </button>
                         </div>
                         <div class="card-body" style="height: 500px; overflow-y: auto;" id="diarizedArea">
                             @if (diarizedTranscriptions.Count == 0)
                             {
-                                <p class="text-muted">停止ボタンを押すと話者分離結果が表示されます...</p>
+                                <p class="text-muted text-center mt-5">停止ボタンを押すと話者分離結果が表示されます</p>
                             }
                             else
                             {
                                 @foreach (var item in diarizedTranscriptions.AsEnumerable().Reverse())
                                 {
-                                    <div class="mb-3 p-3 rounded @GetDiarizedSpeakerClass(item.SpeakerId)">
-                                        <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <div class="mb-2 p-2 rounded @GetDiarizedSpeakerClass(item.SpeakerId)">
+                                        <div class="d-flex justify-content-between align-items-start mb-1">
                                             <strong class="@GetDiarizedSpeakerColor(item.SpeakerId)">
                                                 @GetDiarizedSpeakerName(item.SpeakerId)
                                             </strong>
@@ -162,13 +174,67 @@
                     </div>
                 </div>
             </div>
+
+            <!-- 要約生成エリア -->
+            <div class="row mt-3">
+                <div class="col-12">
+                    <div class="card shadow-sm">
+                        <div class="card-header bg-info text-white d-flex justify-content-between align-items-center py-2">
+                            <div>
+                                <h6 class="mb-0">📝 AI要約</h6>
+                                <small class="opacity-75">文字起こし結果を分析・要約</small>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-light btn-sm" 
+                                        @onclick="CopySummary"
+                                        disabled="@(string.IsNullOrEmpty(summaryText))">
+                                    📋 コピー
+                                </button>
+                                <button class="btn btn-light btn-sm" 
+                                        @onclick="GenerateSummary"
+                                        disabled="@(diarizedTranscriptions.Count == 0 || isSummarizing)">
+                                    @if (isSummarizing)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-2"></span>
+                                        <span>生成中...</span>
+                                    }
+                                    else
+                                    {
+                                        <span>✨ 要約生成</span>
+                                    }
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-body" style="min-height: 200px; max-height: 600px; overflow-y: auto;">
+                            @if (string.IsNullOrEmpty(summaryText))
+                            {
+                                <p class="text-muted text-center mt-5">話者分離完了後、「要約生成」ボタンをクリックしてください</p>
+                            }
+                            else if (summaryError != null)
+                            {
+                                <div class="alert alert-danger mb-0" role="alert">
+                                    <strong>エラー:</strong> @summaryError
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="summary-content">@((MarkupString)summaryText.Replace("\n", "<br />"))</div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
 
 @code {
+    // リアルタイム文字起こしで話者を表示するかどうか（falseで非表示）
+    private const bool ShowRealtimeSpeaker = false;
+    
     private bool isRecording = false;
     private bool isProcessing = false;
+    private bool isSummarizing = false;
     private List<TranscriptionItem> realtimeTranscriptions = new();
     private List<TranscriptionItem> diarizedTranscriptions = new();
     private List<TranscriptionItem> transcriptions = new(); // 互換性のため残す
@@ -179,11 +245,26 @@
     private Dictionary<string, int> diarizedSpeakerMapping = new(); // Azure ID → UI番号のマッピング（話者分離用）
     private int nextSpeakerNumber = 1; // 次に割り当てる話者番号
     private string currentNote = string.Empty; // 現在入力中のメモ
+    private string summaryText = string.Empty;
+    private string? summaryError = null;
 
     protected override void OnInitialized()
     {
         SpeechService.OnTranscriptionReceived += HandleTranscription;
         SpeechService.OnTranscribing += HandleTranscribing;
+        
+        // AI要約サービスの初期化を開始（バックグラウンドで実行）
+        _ = Task.Run(async () => 
+        {
+            try
+            {
+                await SummarizationService.SummarizeTranscriptionAsync("", "", null);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"AI初期化エラー（無視可能）: {ex.Message}");
+            }
+        });
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -499,6 +580,101 @@
         }
         
         return "bg-light";
+    }
+
+    private async Task GenerateSummary()
+    {
+        isSummarizing = true;
+        summaryError = null;
+        summaryText = string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            // リアルタイム文字起こしデータを構築
+            var realtimeText = string.Join("\n", 
+                realtimeTranscriptions
+                    .OrderBy(t => t.Timestamp)
+                    .Select(t => {
+                        if (t.IsNote)
+                        {
+                            return $"[{t.Timestamp:HH:mm:ss}] 【速記メモ】{t.Text}";
+                        }
+                        else
+                        {
+                            string speakerName = GetSpeakerName(t.SpeakerId);
+                            return $"[{t.Timestamp:HH:mm:ss}] {speakerName}: {t.Text}";
+                        }
+                    }));
+
+            // 話者分離結果データを構築
+            var diarizedText = string.Join("\n",
+                diarizedTranscriptions
+                    .OrderBy(t => t.Timestamp)
+                    .Select(t => {
+                        string speakerName = GetDiarizedSpeakerName(t.SpeakerId);
+                        return $"[{t.Timestamp:HH:mm:ss}] {speakerName}: {t.Text}";
+                    }));
+
+            // 要約生成を呼び出し（ストリーミング）
+            await SummarizationService.SummarizeTranscriptionAsync(realtimeText, diarizedText, (partialText) => {
+                summaryText = partialText;
+                InvokeAsync(StateHasChanged);
+            });
+        }
+        catch (Exception ex)
+        {
+            summaryError = $"要約生成に失敗しました: {ex.Message}";
+            Console.WriteLine($"Summarization error: {ex}");
+        }
+        finally
+        {
+            isSummarizing = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CopyRealtimeTranscription()
+    {
+        var text = string.Join("\n", 
+            realtimeTranscriptions
+                .OrderBy(t => t.Timestamp)
+                .Select(t => {
+                    if (t.IsNote)
+                    {
+                        return $"[{t.Timestamp:HH:mm:ss}] 【速記メモ】{t.Text}";
+                    }
+                    else
+                    {
+                        if (ShowRealtimeSpeaker)
+                        {
+                            string speakerName = GetSpeakerName(t.SpeakerId);
+                            return $"[{t.Timestamp:HH:mm:ss}] {speakerName}: {t.Text}";
+                        }
+                        else
+                        {
+                            return $"[{t.Timestamp:HH:mm:ss}] {t.Text}";
+                        }
+                    }
+                }));
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", text);
+    }
+
+    private async Task CopyDiarizedTranscription()
+    {
+        var text = string.Join("\n",
+            diarizedTranscriptions
+                .OrderBy(t => t.Timestamp)
+                .Select(t => {
+                    string speakerName = GetDiarizedSpeakerName(t.SpeakerId);
+                    return $"[{t.Timestamp:HH:mm:ss}] {speakerName}: {t.Text}";
+                }));
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", text);
+    }
+
+    private async Task CopySummary()
+    {
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", summaryText);
     }
 
     public void Dispose()
