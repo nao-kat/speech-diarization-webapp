@@ -1,6 +1,6 @@
 # リアルタイム音声文字起こしシステム
 
-Azure Speech ServiceとAzure AI Foundryを使用したリアルタイム音声文字起こし、話者分離、AI要約のデモアプリケーションです。
+Azure Speech ServiceとMicrosoft Foundryを使用したリアルタイム音声文字起こし、話者分離、AI要約のデモアプリケーションです。
 
 ## ⚠️ 重要な注意事項・免責事項
 
@@ -71,7 +71,7 @@ Azure Speech ServiceとAzure AI Foundryを使用したリアルタイム音声�
               │                       │
               ▼                       ▼
 ┌─────────────────────────┐  ┌──────────────────────────────────┐
-│  Azure Speech Service   │  │  Azure AI Foundry                │
+│  Azure Speech Service   │  │  Microsoft Foundry               │
 │  (Sweden Central)       │  │  (Sweden Central)                │
 │  ┌───────────────────┐  │  │  ┌────────────────────────────┐ │
 │  │ Real-time STT     │  │  │  │  AI Agent (GPT-4o)         │ │
@@ -103,7 +103,7 @@ Azure Speech ServiceとAzure AI Foundryを使用したリアルタイム音声�
    - 話者分離結果 → UI表示
 
 3. **AI要約生成**
-   - 文字起こしテキスト → Azure AI Foundry Agent
+   - 文字起こしテキスト → Microsoft Foundry Agent
    - GPT-4oで要約処理 → スレッド保存
    - 要約結果 → UI表示
 
@@ -111,14 +111,14 @@ Azure Speech ServiceとAzure AI Foundryを使用したリアルタイム音声�
 
 - **開発環境**: API Key (appsettings.Development.json)
 - **本番環境**: Managed Identity (System-assigned)
-  - Azure AI User (AI Foundry)
+  - Azure AI User (Microsoft Foundry)
   - Cognitive Services User (Speech Service)
 
 ## 機能
 
 - 🎤 **リアルタイム音声文字起こし**: ブラウザマイクからの音声をリアルタイムで文字起こし
 - 👥 **話者分離**: 停止後に高精度な話者分離を実行（Azure Speech Fast Transcription API使用）
-- 🤖 **AI要約生成**: Azure AI Foundry Agentによる内容要約
+- 🤖 **AI要約生成**: Microsoft Foundry Agentによる内容要約
 - 📝 **速記者メモ**: 文字起こし中にメモを挿入可能
 - 💾 **音声保存**: サーバー側でWAV形式で一時保存（再実行ボタン用に保持）
 - 🔄 **再実行機能**: 話者分離が失敗した場合、再実行ボタンで再試行可能
@@ -128,7 +128,7 @@ Azure Speech ServiceとAzure AI Foundryを使用したリアルタイム音声�
 
 - .NET 8.0 SDK
 - Azure Speech Serviceサブスクリプション
-- Azure AI Foundryプロジェクトとエージェント
+- Microsoft Foundryプロジェクトとエージェント
 - モダンブラウザ(Chrome, Edge推奨)
 
 ## セットアップ
@@ -191,7 +191,7 @@ dotnet run
 4. **速記者メモ**欄にメモを入力してEnterで追加
 5. **停止ボタン**をクリックすると話者分離が実行されます(右側)
 6. 話者分離が失敗した場合は**🔄 再実行ボタン**で再試行できます
-7. **要約生成**ボタンで内容を要約（Azure AI Foundry Agent使用）
+7. **要約生成**ボタンで内容を要約（Microsoft Foundry Agent使用）
 8. 音声データはサーバー側で一時保存されます（再実行用）
 
 ## 技術スタック
@@ -199,7 +199,7 @@ dotnet run
 - **バックエンド**: .NET 8.0 Blazor Server
 - **Azure Speech SDK**: 1.47.0
 - **Fast Transcription API**: 2024-11-15
-- **Azure AI Foundry**: Azure.AI.Projects 1.2.0-beta.4
+- **Microsoft Foundry**: Azure.AI.Projects 1.2.0-beta.4
 - **認証**: Azure.Identity (DefaultAzureCredential / Managed Identity)
 - **フロントエンド**: Bootstrap 5.3.0
 - **音声処理**: Web Audio API (ScriptProcessorNode)
@@ -212,7 +212,7 @@ dotnet run
 │       └── Home.razor          # メインUI（プライバシー通知含む）
 ├── Services/
 │   ├── SpeechRecognitionService.cs  # Azure Speech統合
-│   └── SummarizationService.cs      # Azure AI Foundry統合
+│   └── SummarizationService.cs      # Microsoft Foundry統合
 ├── wwwroot/
 │   └── js/
 │       └── audioRecorder.js    # ブラウザ音声キャプチャ
@@ -230,7 +230,7 @@ dotnet run
 
 1. App ServiceでSystem-assigned Managed Identityを有効化
 2. 以下のロールを割り当て：
-   - **Azure AI User** (AI Foundryプロジェクトに対して)
+   - **Azure AI User** (Microsoft Foundryプロジェクトに対して)
    - **Cognitive Services User** (Speech Serviceに対して)
 
 ## セキュリティとプライバシー
@@ -283,6 +283,6 @@ dotnet run
 
 ## 参考資料
 
-- [Azure Speech Service Documentation](https://learn.microsoft.com/azure/cognitive-services/speech-service/)
-- [Fast Transcription API](https://learn.microsoft.com/azure/cognitive-services/speech-service/fast-transcription-create)
-- [Conversation Transcription](https://learn.microsoft.com/azure/cognitive-services/speech-service/conversation-transcription)
+- [リアルタイム音声認識](https://learn.microsoft.com/ja-jp/azure/ai-services/speech-service/how-to-recognize-speech?pivots=programming-language-csharp)
+- [話者分離](https://learn.microsoft.com/ja-jp/azure/ai-services/speech-service/fast-transcription-create?tabs=diarization-on)
+- [Microsoft Foundry](https://learn.microsoft.com/ja-jp/azure/ai-foundry/agents/overview?view=foundry)
