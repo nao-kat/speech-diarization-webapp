@@ -214,11 +214,26 @@
                                 <h6 class="mb-0">🎯 話者分離結果</h6>
                                 <small class="opacity-75">録音停止後に自動処理</small>
                             </div>
-                            <button class="btn btn-light btn-sm" 
-                                    @onclick="CopyDiarizedTranscription"
-                                    disabled="@(diarizedTranscriptions.Count == 0)">
-                                📋 コピー
-                            </button>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-light btn-sm" 
+                                        @onclick="RetryDiarization"
+                                        disabled="@(string.IsNullOrEmpty(lastProcessedAudioPath) || isProcessing)">
+                                    @if (isProcessing)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-1"></span>
+                                    }
+                                    else
+                                    {
+                                        <span>🔄</span>
+                                    }
+                                    再実行
+                                </button>
+                                <button class="btn btn-light btn-sm" 
+                                        @onclick="CopyDiarizedTranscription"
+                                        disabled="@(diarizedTranscriptions.Count == 0)">
+                                    📋 コピー
+                                </button>
+                            </div>
                         </div>
                         <div class="card-body" style="height: 500px; overflow-y: auto;" id="diarizedArea">
                             @if (diarizedTranscriptions.Count == 0)
@@ -327,6 +342,7 @@
     private string currentNote = string.Empty; // 現在入力中のメモ
     private string summaryText = string.Empty;
     private string? summaryError = null;
+    private string? lastProcessedAudioPath = null; // 最後に処理した音声ファイルのパス
 
     protected override void OnInitialized()
     {
@@ -404,6 +420,7 @@
     private async Task ProcessDiarization(string audioFilePath)
     {
         isProcessing = true;
+        lastProcessedAudioPath = audioFilePath; // 最後に処理したファイルパスを保存
         StateHasChanged();
         
         try
@@ -445,16 +462,8 @@
             
             Console.WriteLine($"Diarization completed: {results.Count} segments");
             
-            // Clean up temporary file
-            try
-            {
-                File.Delete(audioFilePath);
-                Console.WriteLine($"Deleted temporary file: {audioFilePath}");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Failed to delete temporary file: {ex.Message}");
-            }
+            // 一時ファイルは再実行のため保持（次回録音時に上書きされる）
+            Console.WriteLine($"Temporary file kept for retry: {audioFilePath}");
         }
         catch (Exception ex)
         {
@@ -466,6 +475,17 @@
             isProcessing = false;
             StateHasChanged();
         }
+    }
+
+    private async Task RetryDiarization()
+    {
+        if (string.IsNullOrEmpty(lastProcessedAudioPath))
+        {
+            return;
+        }
+
+        // 最後に保存した音声ファイルから話者分離を再実行
+        await ProcessDiarization(lastProcessedAudioPath);
     }
 
     [JSInvokable]
